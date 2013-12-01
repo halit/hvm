@@ -1,12 +1,11 @@
 // =====================================================================================
 //
+//       Filename:  t.cpp
 //
-//       Filename:  hvm.cpp
+//    Description:  
 //
-//    Description:  My toy virtual machine implentation
-//
-//        Version:  0.1
-//        Created:  10/17/2013 04:33:55 PM
+//        Version:  1.0
+//        Created:  12/02/2013 12:10:54 AM
 //       Revision:  none
 //       Compiler:  gcc
 //
@@ -15,161 +14,111 @@
 //
 // =====================================================================================
 #include "hvm.h"
-
-using namespace std;
 using namespace VM;
 
-void test_add(HVM& virtual_machine){
+void HVM::write_program(int value){
+    program[program_write_counter++] = value;
+}
 
-    int instruction = 0x0000;
-
-    instruction |= LOAD << 12; // binding value
-    instruction |= 0x3 << 8; // register[3]
-    instruction |= 0x7; // register[3] = 7
-
-    virtual_machine.write_program(instruction); // write instruction
-    instruction  = 0x000; // reset value
-
-    instruction |= LOAD << 12; // binding value
-    instruction |= 0x2 << 8; // register[2]
-    instruction |= 0x3; // register[2] = 3
+void HVM::regdump(){
+    for(int i=0;i<REGISTER_NUM;i++)
+        std::cout << ">> HVM Debugger: Register" << i << " value => " << registers[i] << "\n";
     
-    virtual_machine.write_program(instruction); // write instruction
-    instruction  = 0x000; // reset value
+    std::cout << ">> HVM Debugger: Last instruction opcode => " << now_instruction.opcode << "\n";
+    std::cout << ">> HVM Debugger: Last instruction reg_00 => " << now_instruction.reg_00 << "\n";
+    std::cout << ">> HVM Debugger: Last instruction reg_01 => " << now_instruction.reg_01 << "\n";
+    std::cout << ">> HVM Debugger: Last instruction reg_02 => " << now_instruction.reg_02 << "\n";
+    std::cout << ">> HVM Debugger: Last instruction value  => " << now_instruction.value << "\n";
+}
 
-    instruction |= ADD << 12; // sum values
-    instruction |= 0x4 << 8;  // contains sum value to register[4]
-    instruction |= 0x2 << 4;  // register[2]
-    instruction |= 0x3;       // register[3]
+int HVM::fetch(){
+    int result = registers[REGISTER_PC]++;
+    return program[result];
+}
+
+void HVM::eval(){
+    OP_CODES op_code = now_instruction.opcode;
+    switch(op_code){
+        case NOP:
+            break;
+        case HLT:
+            status = false;
+            break;
+        case ADD:
+            registers[now_instruction.reg_00] = registers[now_instruction.reg_01] + registers[now_instruction.reg_02];
+            break;
+        case SUB:
+            registers[now_instruction.reg_00] = registers[now_instruction.reg_01] - registers[now_instruction.reg_02];
+            break;
+        case DIV:
+            registers[now_instruction.reg_00] = registers[now_instruction.reg_01] / registers[now_instruction.reg_02];
+            break;
+        case MUL:
+            registers[now_instruction.reg_00] = registers[now_instruction.reg_01] * registers[now_instruction.reg_02];
+            break;
+        case MOV:
+            registers[now_instruction.reg_00] = registers[now_instruction.reg_01];
+            registers[now_instruction.reg_01] = 0;
+            break;
+        case LOAD:
+            registers[now_instruction.reg_00] = now_instruction.value;
+            break;
+        case JMP:
+            registers[REGISTER_PC] = now_instruction.value;
+            break;
+        case JNE:
+            if(now_instruction.reg_00 != now_instruction.reg_01) registers[REGISTER_PC] = now_instruction.value;
+            else registers[REGISTER_PC]++;
+            break;
+        case JNZ:
+            if(now_instruction.reg_00 != now_instruction.reg_01) registers[REGISTER_PC] = now_instruction.value;
+            else registers[REGISTER_PC]++;
+            break;
+           
+    }
+}
+
+void HVM::decode(int value){
+    now_instruction.opcode = (OP_CODES)(( value & 0xF000 ) >> 12);
+    now_instruction.reg_00 = ( value & 0x0F00 ) >> 8;
+    now_instruction.reg_01 = ( value & 0x00F0 ) >> 4;
+    now_instruction.reg_02 = ( value & 0x000F );
+    now_instruction.value  = ( value & 0x00FF );
+}
+
+void HVM::clean_instruction(){
+    now_instruction.opcode = NOP;
+    now_instruction.reg_00 = 0x0;
+    now_instruction.reg_01 = 0x0;
+
+    now_instruction.reg_02 = 0x0;
+    now_instruction.value  = 0x0;
+}
+
+void HVM::init(){
+    status = true;
+    std::cout << ">> HVM: starting\n";
+
+    for(int i=0;i<MAX_PROGRAM;i++)
+        program[i] = 0x0;
+    std::cout << ">> HVM: program memory cleaned\n";
+
+    for(int i=0;i<REGISTER_NUM;i++)
+        registers[i] = 0x0;
+    std::cout << ">> HVM: registers cleaned\n";
     
-    virtual_machine.write_program(instruction); 
-    instruction  = 0x000; // reset value
+    clean_instruction();
+    std::cout << ">> HVM: instruction register cleaned\n";
 
-    instruction |= HLT << 12; // halt system
-    virtual_machine.write_program(instruction); // write program
+    program_write_counter = 0x0;
+    std::cout << ">> HVM: program write counter cleaned\n";
 }
 
-void load_program(HVM& virtual_machine, int reg, int value ){
-    int instruction = 0x000;
-    instruction |= LOAD << 12;
-    instruction |= reg << 8;
-    instruction |= value;
-
-    virtual_machine.write_program(instruction);
-}
-
-void add_program(HVM& virtual_machine, int reg, int r1, int r2 ){
-    int instruction = 0x000;
-    instruction |= ADD << 12;
-    instruction |= reg << 8;
-    instruction |= r1  << 4;
-    instruction |= r2;
-
-    virtual_machine.write_program(instruction);
-}
-
-void sub_program(HVM& virtual_machine, int reg, int r1, int r2){
-    int instruction = 0x000;
-    instruction |= SUB << 12;
-    instruction |= reg << 8;
-    instruction |= r1  << 4;
-    instruction |= r2;
-
-    virtual_machine.write_program(instruction);
-   
-}
-
-void div_program(HVM& virtual_machine, int reg, int r1, int r2){
-    int instruction = 0x000;
-    instruction |= DIV << 12;
-    instruction |= reg << 8;
-    instruction |= r1  << 4;
-    instruction |= r2;
-
-    virtual_machine.write_program(instruction);
-   
-}
-
-void mul_program(HVM& virtual_machine, int reg, int r1, int r2){
-    int instruction = 0x000;
-    instruction |= MUL << 12;
-    instruction |= reg << 8;
-    instruction |= r1  << 4;
-    instruction |= r2;
-
-    virtual_machine.write_program(instruction);
-   
-}
-
-void mov_program(HVM& virtual_machine, int reg, int r1){
-    int instruction = 0x000;
-    instruction |= MOV << 12;
-    instruction |= reg << 8;
-    instruction |= r1  << 4;
-
-    virtual_machine.write_program(instruction);
-
-}
-
-void jmp_program(HVM& virtual_machine, int value){
-    int instruction = 0x000;
-    instruction |= JMP << 12;
-    instruction |= value;
-
-    virtual_machine.write_program(instruction);
-
-}
-
-void jne_program(HVM& virtual_machine, int r1, int r2, int value){
-    int instruction = 0x000;
-    instruction |= JNE << 12;
-    instruction |= r1  << 8;
-    instruction |= r2  << 4;
-    instruction |= value;
-
-    virtual_machine.write_program(instruction);
-
-}
-
-void jnz_program(HVM& virtual_machine, int r1, int value){
-    int instruction = 0x000;
-    instruction |= JNZ << 12;
-    instruction |= r1  << 8;
-    instruction |= value;
-
-    virtual_machine.write_program(instruction);
-
-}
-
-void hlt_program(HVM& virtual_machine){
-    int instruction = 0x000;
-    instruction |= HLT << 12;
-
-    virtual_machine.write_program(instruction);
-}
-
-
-int main(){
-    HVM my_vm; // init virtual machine
-    //test_add(my_vm); // test add program write to virtual machine program register
-    
-    load_program(my_vm, 2, 15); // 15 -> reg2
-    load_program(my_vm, 3, 18); // 18 -> reg3
-    add_program(my_vm, 4, 2, 3); // reg4 -> reg2 + reg3
-    load_program(my_vm, 2, 30); // 30 -> reg2
-    sub_program(my_vm, 4, 4, 2); // reg4 -> reg4 - reg2
-    load_program(my_vm, 2, 10); // 10 -> reg2
-    mul_program(my_vm, 4, 4, 2); // reg4 -> reg4 * reg2
-    load_program(my_vm, 2, 3); // 3 -> reg2
-    div_program(my_vm, 4, 4, 2); // reg4 -> reg4 / reg2
-    mov_program(my_vm, 2, 4); // reg2 -> reg4
-    mov_program(my_vm, 1, 2); // reg1 -> reg2
-    //jmp_program(my_vm, 0);
-    hlt_program(my_vm); // stop program
-
-    my_vm.run(); // run the machine
-    my_vm.regdump(); // register dump
-
-    return 0;
+void HVM::run(){
+    while(status){
+        decode(fetch());
+        eval();
+        //regdump();
+    }
 }
 
